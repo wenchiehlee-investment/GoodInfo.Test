@@ -59,13 +59,13 @@ jobs:
             echo "Listing downloaded files:"
             ls -la DividendDetail/
             python -c "
-            import pandas as pd
-            tables = pd.read_html('DividendDetail/DividendDetail_2330_台積電.xls')
-            print('Extracted tables count:', len(tables))
-            print('Shape:', tables[0].shape)
-            print('First 5 rows:')
-            print(tables[0].iloc[:5, :5])
-            "
+import pandas as pd
+tables = pd.read_html('DividendDetail/DividendDetail_2330_台積電.xls')
+print('Extracted tables count:', len(tables))
+print('Shape:', tables[0].shape)
+print('First 5 rows:')
+print(tables[0].iloc[:5, :5])
+"
           else
             echo "❌ Download directory DividendDetail not found."
           fi
