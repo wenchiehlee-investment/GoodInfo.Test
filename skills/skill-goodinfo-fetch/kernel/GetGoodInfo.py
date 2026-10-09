@@ -669,10 +669,63 @@ def cdp_download_xls(stock_id, data_type_code, cdp_url):
                 print(f"   🔍 頁面標題: {title}")
 
                 if "Just a moment" in title or "Cloudflare" in title:
-                    print("   ⏳ Cloudflare challenge in progress, waiting up to 10s...")
-                    await page.wait_for_timeout(7000)
+                    print("   ⏳ Cloudflare challenge in progress, waiting up to 5s before checking Turnstile...")
+                    await page.wait_for_timeout(3000)
                     title = await page.title()
-                    print(f"   🔍 頁面標題 (等待後): {title}")
+                    
+                    if "Just a moment" in title or "Cloudflare" in title:
+                        print("   🤖 偵測到 Cloudflare 驗證畫面，嘗試尋找並點擊 Turnstile Checkbox...")
+                        clicked = False
+                        
+                        # Strategy 1: Look for Cloudflare Turnstile iframes
+                        for attempt in range(3):
+                            frames = page.frames
+                            print(f"      [嘗試 {attempt+1}/3] 掃描頁面 Frames (共 {len(frames)} 個)...")
+                            for frame in frames:
+                                try:
+                                    if "cloudflare" in frame.url or "challenges" in frame.url or "turnstile" in frame.url:
+                                        print(f"      🎯 找到 Cloudflare Frame: {frame.url[:60]}...")
+                                        # Search for checkbox within frame
+                                        cb = await frame.query_selector("input[type='checkbox'], #challenge-stage input, .ctp-checkbox-label, .mark")
+                                        if cb:
+                                            print("      👉 找到核取方塊元素，執行點擊...")
+                                            await cb.click()
+                                            clicked = True
+                                            break
+                                except Exception as e:
+                                    pass
+                            if clicked:
+                                break
+                            
+                            # Strategy 2: If frame query didn't find, try clicking Turnstile container on main page
+                            try:
+                                main_cb = await page.query_selector("#cf-turnstile, #turnstile-wrapper, div[id*='cf-chl-widget'] iframe, iframe[src*='challenges.cloudflare.com']")
+                                if main_cb:
+                                    print("      👉 在主頁面找到 Turnstile 元件/iframe，嘗試擬真點擊...")
+                                    box = await main_cb.bounding_box()
+                                    if box:
+                                        # Click near the left side where the checkbox is located (approx x+25, y+height/2)
+                                        await page.mouse.click(box['x'] + 25, box['y'] + (box['height'] / 2))
+                                        clicked = True
+                                        break
+                            except Exception:
+                                pass
+                            
+                            await page.wait_for_timeout(2000)
+
+                        if clicked:
+                            print("   ⏳ 已點擊驗證方塊，等待 Cloudflare 驗證完成與跳轉 (最多 15 秒)...")
+                            for w in range(15):
+                                await page.wait_for_timeout(1000)
+                                title = await page.title()
+                                if "Just a moment" not in title and "Cloudflare" not in title and title != "":
+                                    print(f"   🎉 成功通過驗證！新標題: {title}")
+                                    break
+                        else:
+                            print("   ⚠️ 未能找到或點擊 Turnstile 核取方塊")
+
+                    title = await page.title()
+                    print(f"   🔍 頁面標題 (挑戰處理後): {title}")
 
                 # Extract table HTML
                 table_html = await page.evaluate('''() => {
@@ -689,11 +742,14 @@ def cdp_download_xls(stock_id, data_type_code, cdp_url):
                     print("❌ [CDP Mode] Table tblDetail not found on page")
                     # Capture screenshot and page content for diagnosis
                     try:
-                        screenshot_path = "cdp_failure_screenshot.png"
-                        html_path = "cdp_failure_page.html"
+                        screenshot_path = f"debug_screenshot_{stock_id}_{data_type_code}.png"
+                        html_path = f"debug_page_{stock_id}_{data_type_code}.html"
                         await page.screenshot(path=screenshot_path, full_page=True)
+                        await page.screenshot(path="cdp_failure_screenshot.png", full_page=True)
                         page_content = await page.content()
                         with open(html_path, "w", encoding="utf-8") as f:
+                            f.write(page_content)
+                        with open("cdp_failure_page.html", "w", encoding="utf-8") as f:
                             f.write(page_content)
                         print(f"📸 [CDP Mode] 已擷取攔截畫面: {screenshot_path}")
                         print(f"📄 [CDP Mode] 已儲存頁面 HTML: {html_path}")
