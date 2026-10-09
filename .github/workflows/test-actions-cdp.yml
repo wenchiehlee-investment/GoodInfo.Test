@@ -1,0 +1,69 @@
+name: Test Chromium CDP in GitHub Actions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-cdp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright pandas beautifulsoup4 requests lxml
+          python -m playwright install --with-deps chromium
+
+      - name: Launch Dedicated Chromium CDP Docker Container
+        run: |
+          echo "Pulling and running linuxserver/chromium..."
+          docker run -d \
+            --name chromium-cdp \
+            -p 9222:9222 \
+            -e CHROME_CLI="--remote-debugging-port=9223 --remote-allow-origins=* https://about:blank" \
+            -e NO_DECOR=1 \
+            -e INSTALL_PACKAGES="noto-fonts-cjk socat" \
+            --shm-size="1gb" \
+            --security-opt seccomp:unconfined \
+            linuxserver/chromium:amd64-50ba601b-ls108 \
+            sh -c "apt-get update && apt-get install -y socat fonts-wqy-zenhei && socat TCP-LISTEN:9222,fork,reuseaddr TCP:127.0.0.1:9223 & tail -f /dev/null"
+
+          echo "Waiting for CDP on port 9222 to become ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:9222/json/version | grep -q "Browser"; then
+              echo "✅ Chromium CDP is UP and ready!"
+              curl -s http://localhost:9222/json/version
+              break
+            fi
+            echo "Waiting for CDP ($i/30)..."
+            sleep 2
+          done
+
+      - name: Run GoodInfo Download Verification via Local Container CDP
+        env:
+          GOODINFO_CDP_URL: "http://localhost:9222"
+          GOODINFO_USE_CDP: "always"
+        run: |
+          echo "Testing download-one via skills pipeline with container CDP..."
+          python skills/skill-goodinfo-fetch/scripts/goodinfo_pipeline.py download-one 2330 1
+          
+          echo "Listing downloaded files:"
+          ls -la DividendDetail/
+          
+          echo "Validating downloaded XLS content:"
+          python -c "
+          import pandas as pd
+          tables = pd.read_html('DividendDetail/DividendDetail_2330_台積電.xls')
+          print('Extracted tables count:', len(tables))
+          print('Shape:', tables[0].shape)
+          print('First 5 rows:')
+          print(tables[0].iloc[:5, :5])
+          "
