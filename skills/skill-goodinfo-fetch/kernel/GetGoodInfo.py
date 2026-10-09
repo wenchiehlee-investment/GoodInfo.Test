@@ -677,39 +677,42 @@ def cdp_download_xls(stock_id, data_type_code, cdp_url):
                         print("   🤖 偵測到 Cloudflare 驗證畫面，嘗試尋找並點擊 Turnstile Checkbox...")
                         clicked = False
                         
-                        # Strategy: Locate Turnstile iframe element and click its checkbox area
-                        for attempt in range(5):
-                            print(f"      [嘗試 {attempt+1}/5] 尋找 Turnstile iframe / widget...")
+                        # Strategy: Locate Turnstile iframe element or container and click its checkbox area
+                        for attempt in range(8):
+                            print(f"      [嘗試 {attempt+1}/8] 尋找 Turnstile iframe / widget / container...")
                             try:
-                                # Find iframe on page directly
-                                iframes = await page.query_selector_all("iframe[src*='challenges.cloudflare.com'], iframe[src*='turnstile'], div[id*='cf-chl-widget'] iframe")
+                                # First: check all iframes on page
+                                iframes = await page.query_selector_all("iframe")
                                 for iframe_el in iframes:
+                                    src = await iframe_el.get_attribute("src") or ""
                                     box = await iframe_el.bounding_box()
-                                    if box and box['width'] > 0 and box['height'] > 0:
-                                        print(f"      🎯 找到 Turnstile iframe (x={box['x']}, y={box['y']}, w={box['width']}, h={box['height']})")
-                                        # First try clicking through frame content
-                                        content_frame = await iframe_el.content_frame()
-                                        if content_frame:
-                                            try:
-                                                # In Turnstile, checkbox is typically inside label or input or body
-                                                el = await content_frame.query_selector("input[type='checkbox'], .ctp-checkbox-label, label, body")
-                                                if el:
-                                                    print("      👉 在 Frame 內找到目標元素，執行點擊...")
-                                                    await el.click(timeout=3000)
-                                                    clicked = True
-                                                    break
-                                            except Exception as fe:
-                                                print(f"      ⚠️ Frame 點擊失敗: {fe}")
-                                        
-                                        # Fallback to mouse click on the left checkbox zone of the iframe
-                                        print("      👉 使用擬真滑鼠點擊 iframe 核取方塊區域...")
+                                    if box and box['width'] > 50 and box['height'] > 20:
+                                        print(f"      🎯 找到 Iframe (src={src[:50]}, x={box['x']}, y={box['y']}, w={box['width']}, h={box['height']})")
+                                        # Click the checkbox inside the iframe (near left side)
                                         click_x = box['x'] + 28
                                         click_y = box['y'] + (box['height'] / 2)
+                                        print(f"      👉 擬真移動滑鼠並點擊 ({click_x:.1f}, {click_y:.1f})...")
                                         await page.mouse.move(click_x, click_y)
                                         await page.wait_for_timeout(300)
                                         await page.mouse.click(click_x, click_y)
                                         clicked = True
                                         break
+                                
+                                if not clicked:
+                                    # Second: If iframe not yet attached to DOM, look for container #bstyI3 or turnstile response container
+                                    container = await page.query_selector("#bstyI3, input[name='cf-turnstile-response']")
+                                    if container:
+                                        box = await container.bounding_box()
+                                        if box and box['width'] > 0 and box['height'] > 0:
+                                            print(f"      🎯 找到 Turnstile 容器 #bstyI3 (x={box['x']}, y={box['y']})")
+                                            click_x = box['x'] + 28
+                                            click_y = box['y'] + (box['height'] / 2 if box['height'] < 100 else 32)
+                                            print(f"      👉 擬真移動滑鼠並點擊容器位置 ({click_x:.1f}, {click_y:.1f})...")
+                                            await page.mouse.move(click_x, click_y)
+                                            await page.wait_for_timeout(300)
+                                            await page.mouse.click(click_x, click_y)
+                                            clicked = True
+                                            break
                             except Exception as e:
                                 print(f"      ⚠️ 尋找 Turnstile 錯誤: {e}")
 
