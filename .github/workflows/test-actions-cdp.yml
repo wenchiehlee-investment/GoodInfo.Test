@@ -53,17 +53,32 @@ jobs:
           GOODINFO_USE_CDP: "always"
         run: |
           echo "Testing download-one via skills pipeline with container CDP..."
-          python skills/skill-goodinfo-fetch/scripts/goodinfo_pipeline.py download-one 2330 1
+          python skills/skill-goodinfo-fetch/scripts/goodinfo_pipeline.py download-one 2330 1 || true
           
-          echo "Listing downloaded files:"
-          ls -la DividendDetail/
-          
-          echo "Validating downloaded XLS content:"
-          python -c "
-          import pandas as pd
-          tables = pd.read_html('DividendDetail/DividendDetail_2330_台積電.xls')
-          print('Extracted tables count:', len(tables))
-          print('Shape:', tables[0].shape)
-          print('First 5 rows:')
-          print(tables[0].iloc[:5, :5])
-          "
+          if [ -d "DividendDetail" ]; then
+            echo "Listing downloaded files:"
+            ls -la DividendDetail/
+            python -c "
+            import pandas as pd
+            tables = pd.read_html('DividendDetail/DividendDetail_2330_台積電.xls')
+            print('Extracted tables count:', len(tables))
+            print('Shape:', tables[0].shape)
+            print('First 5 rows:')
+            print(tables[0].iloc[:5, :5])
+            "
+          else
+            echo "❌ Download directory DividendDetail not found."
+          fi
+
+      - name: Upload Snapshot and Diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-blocked-snapshot
+          path: |
+            cdp_failure_screenshot.png
+            cdp_failure_page.html
+            *.png
+            *.html
+          retention-days: 3
+

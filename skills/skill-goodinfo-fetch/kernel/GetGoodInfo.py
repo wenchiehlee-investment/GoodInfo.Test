@@ -687,6 +687,18 @@ def cdp_download_xls(stock_id, data_type_code, cdp_url):
 
                 if not table_html:
                     print("❌ [CDP Mode] Table tblDetail not found on page")
+                    # Capture screenshot and page content for diagnosis
+                    try:
+                        screenshot_path = "cdp_failure_screenshot.png"
+                        html_path = "cdp_failure_page.html"
+                        await page.screenshot(path=screenshot_path, full_page=True)
+                        page_content = await page.content()
+                        with open(html_path, "w", encoding="utf-8") as f:
+                            f.write(page_content)
+                        print(f"📸 [CDP Mode] 已擷取攔截畫面: {screenshot_path}")
+                        print(f"📄 [CDP Mode] 已儲存頁面 HTML: {html_path}")
+                    except Exception as snap_err:
+                        print(f"⚠️ [CDP Mode] 擷取截圖/HTML 失敗: {snap_err}")
                     return False
 
                 # Clean up dummy header and comments
