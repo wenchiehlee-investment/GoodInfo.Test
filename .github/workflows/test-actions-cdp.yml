@@ -22,7 +22,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright pandas beautifulsoup4 requests lxml
+          pip install playwright playwright-stealth pandas beautifulsoup4 requests lxml
           python -m playwright install --with-deps chromium
 
       - name: Launch Dedicated Chromium CDP Docker Container

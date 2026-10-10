@@ -660,6 +660,22 @@ def cdp_download_xls(stock_id, data_type_code, cdp_url):
             browser = await p.chromium.connect_over_cdp(cdp_url)
             context = browser.contexts[0]
             page = await context.new_page()
+
+            # Apply Playwright Stealth evasions to mask automated browser fingerprints
+            try:
+                from playwright_stealth import Stealth
+                stealth_config = Stealth(
+                    navigator_webdriver=True,
+                    chrome_app=True,
+                    chrome_csi=True,
+                    chrome_load_times=True,
+                    navigator_languages_override=('zh-TW', 'zh', 'en-US', 'en'),
+                    navigator_platform_override='Win32'
+                )
+                await stealth_config.apply_stealth_async(page)
+                print("   🛡️ [CDP Mode] 已套用 Playwright Stealth 指紋偽裝 (隱藏 navigator.webdriver 等)")
+            except Exception as stealth_err:
+                print(f"   ⚠️ [CDP Mode] 套用 Stealth 失敗或未安裝: {stealth_err}")
             
             try:
                 print(f"🌐 [CDP Mode] Navigating to {url} ...")
